@@ -7,9 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir --upgrade pip wheel
+RUN pip install --no-cache-dir 'setuptools<70'
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --no-build-isolation openai-whisper==20240930
+RUN pip install --no-cache-dir setuptools
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 
