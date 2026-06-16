@@ -13,8 +13,8 @@ COPY backend/ .
 
 FROM node:20-alpine AS frontend-build
 WORKDIR /app
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+COPY frontend/package.json ./
+RUN npm install
 COPY frontend/ .
 RUN npm run build
 
@@ -48,4 +48,4 @@ server {
 }
 EOF
 
-CMD nginx && uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+CMD ["sh", "-c", "nginx && uvicorn backend.app.main:app --host 127.0.0.1 --port 8000"]
