@@ -4,7 +4,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
-    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -13,7 +12,7 @@ RUN pip install --no-cache-dir 'setuptools<70'
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --no-build-isolation openai-whisper==20240930
 RUN pip install --no-cache-dir setuptools
-RUN pip install --no-cache-dir -r requirements.txt && python -c "import asyncpg; print('asyncpg OK'); import sqlalchemy.dialects.postgresql.asyncpg; print('asyncpg dialect OK')"
+RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ .
 
 FROM node:20-alpine AS frontend-build
@@ -28,14 +27,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
-    libpq-dev \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel uvicorn celery redis
 
 COPY --from=backend-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
-RUN python -c "import asyncpg; print('stage-2 asyncpg OK')"
 COPY --from=backend-build /app /backend
 COPY --from=frontend-build /app/dist /frontend
 
