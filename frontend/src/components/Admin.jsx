@@ -1,6 +1,37 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAdminConfig, updateAdminConfig, getCostSummary, getCostEstimate } from '../api'
 
+const FIELD_LINKS = {
+  apify_token: 'https://console.apify.com/settings/integrations',
+  youtube_api_key: 'https://console.cloud.google.com/apis/credentials',
+  pexels_api_key: 'https://www.pexels.com/api/',
+  upload_post_api_key: 'https://upload-post.com',
+  'instagram.app_id': 'https://developers.facebook.com/apps/',
+  'instagram.app_secret': 'https://developers.facebook.com/apps/',
+  'instagram.page_access_token': 'https://business.facebook.com/settings/accounts',
+  'instagram.ig_user_id': 'https://www.instagram.com/',
+  'tiktok.upload_post_api_key_full': 'https://upload-post.com',
+  'youtube.client_id': 'https://console.cloud.google.com/apis/credentials',
+  'youtube.client_secret': 'https://console.cloud.google.com/apis/credentials',
+  'youtube.refresh_token': 'https://developers.google.com/youtube/v3/guides/auth/server-side-web',
+  'facebook.page_access_token': 'https://business.facebook.com/settings/accounts',
+}
+
+function FieldLink({ fieldKey, parentKey }) {
+  const link = FIELD_LINKS[parentKey ? `${parentKey}.${fieldKey}` : fieldKey]
+  if (!link) return null
+  return (
+    <a
+      href={link}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs text-brand-400 hover:text-brand-300 hover:underline shrink-0"
+    >
+      Get it →
+    </a>
+  )
+}
+
 function ConfigSection({ title, config, onChange }) {
   if (!config) return null
   return (
@@ -29,7 +60,10 @@ function ConfigSection({ title, config, onChange }) {
                 const subLabel = subKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
                 return (
                   <div key={subKey} className="flex flex-col gap-1">
-                    <label className="text-sm text-gray-400">{subLabel}</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm text-gray-400">{subLabel}</label>
+                      <FieldLink fieldKey={subKey} parentKey={key} />
+                    </div>
                     {typeof subVal === 'boolean' ? (
                       <label className="flex items-center gap-2 text-gray-300 cursor-pointer">
                         <input
@@ -80,7 +114,10 @@ function ConfigSection({ title, config, onChange }) {
         }
         return (
           <div key={key} className="flex flex-col gap-1">
-            <label className="text-sm text-gray-400">{label}</label>
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-400">{label}</label>
+              <FieldLink fieldKey={key} />
+            </div>
             <input
               type={typeof val === 'number' ? 'number' : 'text'}
               value={config[key] ?? ''}
