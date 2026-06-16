@@ -118,7 +118,7 @@ async def _collect_trending_hashtags(session: AsyncSession) -> set:
 
     result = await session.execute(
         text("""
-            SELECT DISTINCT jsonb_array_elements_text(hashtags) as tag
+            SELECT DISTINCT jsonb_array_elements_text(hashtags::jsonb) as tag
             FROM scraped_videos
             WHERE scraped_at >= NOW() - INTERVAL '24 hours'
         """)
