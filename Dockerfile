@@ -27,7 +27,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
-    nginx \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel uvicorn celery redis
@@ -36,21 +35,6 @@ COPY --from=backend-build /usr/local/lib/python3.12/site-packages /usr/local/lib
 COPY --from=backend-build /app /backend
 COPY --from=frontend-build /app/dist /frontend
 
-COPY <<'EOF' /etc/nginx/conf.d/default.conf
-server {
-    listen 80;
-    location / {
-        root /frontend;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-EOF
-
 ENV PYTHONPATH=/backend
-CMD ["sh", "-c", "nginx && uvicorn app.main:app --host 127.0.0.1 --port 8000"]
+EXPOSE 8080
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

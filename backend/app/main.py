@@ -393,3 +393,18 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "upload_statuses": upload_statuses,
         "platform_counts": platform_counts,
     }
+
+
+frontend_dir = "/frontend"
+if os.path.isdir(frontend_dir):
+    assets_dir = os.path.join(frontend_dir, "assets")
+    if os.path.isdir(assets_dir):
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str = ""):
+        index_path = os.path.join(frontend_dir, "index.html")
+        if os.path.isfile(index_path):
+            return FileResponse(index_path)
+        return JSONResponse({"error": "Frontend not built"}, status_code=200)
