@@ -82,9 +82,9 @@ function ConfigSection({ title, config, onChange }) {
           <div key={key} className="flex flex-col gap-1">
             <label className="text-sm text-gray-400">{label}</label>
             <input
-              type={val === '' ? 'text' : 'number'}
+              type={typeof val === 'number' ? 'number' : 'text'}
               value={config[key] ?? ''}
-              onChange={(e) => onChange(key, e.target.value)}
+              onChange={(e) => onChange(key, typeof val === 'number' ? Number(e.target.value) : e.target.value)}
               className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full max-w-md"
             />
           </div>
