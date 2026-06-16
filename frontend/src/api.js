@@ -54,4 +54,10 @@ export const getAdminConfig = (key) =>
 export const updateAdminConfig = (key, value) =>
   api.put(`/admin/config/${key}`, value).then((r) => r.data)
 
+export const getCostSummary = () =>
+  api.get('/stats/costs').then((r) => r.data)
+
+export const getCostEstimate = (platforms = 'instagram,tiktok,youtube,facebook', count = 10) =>
+  api.get('/stats/costs/estimate', { params: { platforms, count } }).then((r) => r.data)
+
 export default api

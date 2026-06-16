@@ -19,6 +19,7 @@ from moviepy import (
 
 from app.config import settings
 from app.generation.pattern import extract_patterns
+from app.costs import COST_PER_SCRAPE, COST_PER_GENERATE, COST_PER_UPLOAD
 
 
 class VideoGenerationPipeline:
@@ -66,6 +67,19 @@ class VideoGenerationPipeline:
 
         generated_caption = self._build_caption(caption_text, patterns["top_hashtags"])
 
+        scrape_costs = {}
+        for v in top_videos:
+            p = v.get("platform", "")
+            scrape_costs[p] = COST_PER_SCRAPE.get(p, 0)
+        total_scrape_cost = sum(scrape_costs.values())
+        total_gen_cost = sum(COST_PER_GENERATE.values())
+        total_cost = round(total_scrape_cost + total_gen_cost, 6)
+        cost_breakdown = {
+            "scrape": {"per_video": scrape_costs, "total": round(total_scrape_cost, 6)},
+            "generate": {k: v for k, v in COST_PER_GENERATE.items()},
+            "total": total_cost,
+        }
+
         return {
             "task_id": task_id,
             "output_path": str(output_path),
@@ -74,6 +88,8 @@ class VideoGenerationPipeline:
             "hook_text": caption_text,
             "duration": patterns["target_duration"],
             "pattern_breakdown": patterns,
+            "total_cost": total_cost,
+            "cost_breakdown": cost_breakdown,
         }
 
     def _download_stock_clip(self, work_dir: Path) -> str:

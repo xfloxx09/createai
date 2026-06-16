@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getScoredVideos, triggerScrape, getStats } from '../api'
+import { getScoredVideos, triggerScrape, getStats, getCostSummary } from '../api'
 
 const PLATFORMS = ['instagram', 'tiktok', 'youtube', 'facebook']
 
@@ -42,6 +42,7 @@ function ScoreBar({ score }) {
 export default function Dashboard() {
   const [videos, setVideos] = useState([])
   const [stats, setStats] = useState(null)
+  const [costs, setCosts] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
   const [filter, setFilter] = useState('')
@@ -52,12 +53,14 @@ export default function Dashboard() {
       const params = {}
       if (filter) params.platform = filter
       if (minScore) params.min_score = minScore
-      const [videosData, statsData] = await Promise.all([
+      const [videosData, statsData, costData] = await Promise.all([
         getScoredVideos(params),
         getStats(),
+        getCostSummary(),
       ])
       setVideos(videosData)
       setStats(statsData)
+      setCosts(costData)
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err)
     } finally {
@@ -89,11 +92,21 @@ export default function Dashboard() {
       </div>
 
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Scraped Videos" value={stats.total_scraped_videos} color="text-brand-400" />
-          <StatCard label="Scored Videos" value={stats.total_scored_videos} color="text-green-400" />
-          <StatCard label="Generated" value={stats.total_generated_videos} color="text-yellow-400" />
-          <StatCard label="Uploads" value={stats.total_uploads} color="text-purple-400" />
+        <div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Scraped Videos" value={stats.total_scraped_videos} color="text-brand-400" />
+            <StatCard label="Scored Videos" value={stats.total_scored_videos} color="text-green-400" />
+            <StatCard label="Generated" value={stats.total_generated_videos} color="text-yellow-400" />
+            <StatCard label="Uploads" value={stats.total_uploads} color="text-purple-400" />
+          </div>
+          {costs && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <StatCard label="Total Cost" value={`$${costs.total_cost.toFixed(4)}`} color="text-amber-400" />
+              <StatCard label="Avg Cost/Video" value={`$${costs.average_cost_per_video.toFixed(6)}`} color="text-emerald-400" />
+              <StatCard label="Scrape Cost" value={`$${costs.scrape_cost.toFixed(4)}`} color="text-rose-400" />
+              <StatCard label="Generate Cost" value={`$${costs.generate_cost.toFixed(4)}`} color="text-sky-400" />
+            </div>
+          )}
         </div>
       )}
 

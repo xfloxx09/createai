@@ -60,6 +60,8 @@ class GeneratedVideo(Base):
     thumbnail_path = Column(Text, nullable=True)
     duration = Column(Float, default=0.0)
     pattern_breakdown = Column(JSON, nullable=True)
+    total_cost = Column(Float, default=0.0)
+    cost_breakdown = Column(JSON, default=dict)
     created_at = Column(DateTime, server_default=func.now())
 
 

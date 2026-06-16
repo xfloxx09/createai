@@ -184,6 +184,8 @@ async def _generate_video_async() -> Optional[dict]:
             thumbnail_path=generation_result.get("thumbnail_path"),
             duration=generation_result["duration"],
             pattern_breakdown=generation_result.get("pattern_breakdown"),
+            total_cost=generation_result.get("total_cost", 0.0),
+            cost_breakdown=generation_result.get("cost_breakdown", {}),
         )
         session.add(gv)
         await session.commit()

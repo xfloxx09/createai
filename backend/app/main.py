@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import init_db, get_db, async_session_factory
 from app.models import ScrapedVideo, ScoredVideo, GeneratedVideo, UploadLog, ScheduleConfig, AppConfig
+from app.costs import COST_PER_SCRAPE, COST_PER_GENERATE, COST_PER_UPLOAD, PROVIDERS, estimate_full_pipeline, estimate_scrape_cost, estimate_generate_cost, estimate_upload_cost
 from app.scrapers.instagram import InstagramScraper
 from app.scrapers.tiktok import TikTokScraper
 from app.scrapers.youtube import YouTubeScraper
@@ -248,6 +249,8 @@ async def list_generated_videos(db: AsyncSession = Depends(get_db)):
             "thumbnail_path": v.thumbnail_path,
             "duration": v.duration,
             "pattern_breakdown": v.pattern_breakdown,
+            "total_cost": v.total_cost,
+            "cost_breakdown": v.cost_breakdown,
             "created_at": v.created_at.isoformat() if v.created_at else None,
         }
         for v in videos
@@ -393,6 +396,33 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "upload_statuses": upload_statuses,
         "platform_counts": platform_counts,
     }
+
+
+@app.get("/api/stats/costs")
+async def get_cost_summary(db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GeneratedVideo))
+    videos = result.scalars().all()
+    total_cost = round(sum(v.total_cost or 0 for v in videos), 6)
+    scrape_cost = round(sum(((v.cost_breakdown or {}).get("scrape") or {}).get("total", 0) for v in videos), 6)
+    generate_cost = round(sum(sum(((v.cost_breakdown or {}).get("generate") or {}).values()) for v in videos), 6)
+    count = len(videos)
+    return {
+        "total_cost": total_cost,
+        "scrape_cost": scrape_cost,
+        "generate_cost": generate_cost,
+        "videos_generated": count,
+        "average_cost_per_video": round(total_cost / max(count, 1), 6),
+        "cost_per_scrape": COST_PER_SCRAPE,
+        "cost_per_generate": COST_PER_GENERATE,
+        "cost_per_upload": COST_PER_UPLOAD,
+        "providers": PROVIDERS,
+    }
+
+
+@app.get("/api/stats/costs/estimate")
+async def estimate_costs(platforms: str = "instagram,tiktok,youtube,facebook", count: int = 10):
+    platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
+    return estimate_full_pipeline(platform_list, count)
 
 
 DEFAULT_CONFIGS = {
