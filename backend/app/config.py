@@ -22,8 +22,8 @@ class Settings(BaseSettings):
 
     upload_post_api_key: Optional[str] = None
 
-    celery_broker_url: str = "redis://redis:6379/0"
-    celery_result_backend: str = "redis://redis:6379/0"
+    celery_broker_url: str = ""
+    celery_result_backend: str = ""
 
     temp_dir: str = "/tmp/createai"
     max_scrape_per_platform: int = 50
@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
+
+    def model_post_init(self, __context):
+        if not self.celery_broker_url:
+            self.celery_broker_url = self.redis_url
+        if not self.celery_result_backend:
+            self.celery_result_backend = self.redis_url
 
 
 settings = Settings()
