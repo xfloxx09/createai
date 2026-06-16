@@ -60,4 +60,10 @@ export const getCostSummary = () =>
 export const getCostEstimate = (platforms = 'instagram,tiktok,youtube,facebook', count = 10) =>
   api.get('/stats/costs/estimate', { params: { platforms, count } }).then((r) => r.data)
 
+export const getStrategy = () =>
+  api.get('/strategy').then((r) => r.data)
+
+export const refreshStrategy = () =>
+  api.post('/strategy/refresh').then((r) => r.data)
+
 export default api

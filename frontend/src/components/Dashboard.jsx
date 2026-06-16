@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getScoredVideos, triggerScrape, getStats, getCostSummary } from '../api'
+import { getScoredVideos, triggerScrape, getStats, getCostSummary, getStrategy, refreshStrategy } from '../api'
 
 const PLATFORMS = ['instagram', 'tiktok', 'youtube', 'facebook']
 
@@ -43,6 +43,7 @@ export default function Dashboard() {
   const [videos, setVideos] = useState([])
   const [stats, setStats] = useState(null)
   const [costs, setCosts] = useState(null)
+  const [strategy, setStrategy] = useState(null)
   const [loading, setLoading] = useState(true)
   const [scraping, setScraping] = useState(false)
   const [filter, setFilter] = useState('')
@@ -53,14 +54,16 @@ export default function Dashboard() {
       const params = {}
       if (filter) params.platform = filter
       if (minScore) params.min_score = minScore
-      const [videosData, statsData, costData] = await Promise.all([
+      const [videosData, statsData, costData, strategyData] = await Promise.all([
         getScoredVideos(params),
         getStats(),
         getCostSummary(),
+        getStrategy(),
       ])
       setVideos(videosData)
       setStats(statsData)
       setCosts(costData)
+      setStrategy(strategyData)
     } catch (err) {
       console.error('Failed to fetch dashboard data:', err)
     } finally {
@@ -74,7 +77,13 @@ export default function Dashboard() {
     setScraping(true)
     try {
       await triggerScrape()
-      setTimeout(fetchData, 5000)
+      setTimeout(async () => {
+        await fetchData()
+        try {
+          const s = await refreshStrategy()
+          setStrategy(s)
+        } catch (_) {}
+      }, 8000)
     } catch (err) {
       console.error('Scrape failed:', err)
     } finally {
@@ -105,6 +114,51 @@ export default function Dashboard() {
               <StatCard label="Avg Cost/Video" value={`$${costs.average_cost_per_video.toFixed(6)}`} color="text-emerald-400" />
               <StatCard label="Scrape Cost" value={`$${costs.scrape_cost.toFixed(4)}`} color="text-rose-400" />
               <StatCard label="Generate Cost" value={`$${costs.generate_cost.toFixed(4)}`} color="text-sky-400" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {strategy && strategy.videos_analyzed > 0 && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Content Strategy (auto-detected from top videos)</h2>
+            <button onClick={async () => { const s = await refreshStrategy(); setStrategy(s) }} className="btn-secondary text-xs px-3 py-1">
+              Re-analyze
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+              <div className="text-gray-400 text-xs mb-1">Hook Style</div>
+              <div className="text-white font-semibold capitalize">{strategy.recommended_hook_style.replace(/_/g, ' ')}</div>
+              <div className="text-gray-500 text-xs mt-1">Avg score: {strategy.hook_performance?.[strategy.recommended_hook_style] || '—'}</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+              <div className="text-gray-400 text-xs mb-1">Caption Style</div>
+              <div className="text-white font-semibold capitalize">{strategy.recommended_caption_style.replace(/_/g, ' ')}</div>
+              <div className="text-gray-500 text-xs mt-1">Avg score: {strategy.caption_performance?.[strategy.recommended_caption_style] || '—'}</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+              <div className="text-gray-400 text-xs mb-1">Duration / Resolution</div>
+              <div className="text-white font-semibold">{strategy.recommended_duration}s</div>
+              <div className="text-gray-400 text-xs">{strategy.recommended_resolution}</div>
+            </div>
+            <div className="bg-gray-800/50 rounded-lg p-3 border border-gray-700">
+              <div className="text-gray-400 text-xs mb-1">Top Hashtag</div>
+              <div className="text-brand-400 font-semibold">#{strategy.recommended_hashtags?.[0] || '—'}</div>
+              <div className="text-gray-500 text-xs mt-1">Music: {strategy.recommend_music ? 'Yes' : 'No'}</div>
+            </div>
+          </div>
+          {strategy.hook_distribution && Object.keys(strategy.hook_distribution).length > 0 && (
+            <div className="mt-4">
+              <div className="text-xs text-gray-400 mb-2">Hook distribution in top videos</div>
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(strategy.hook_distribution).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([style, count]) => (
+                  <span key={style} className={`text-xs px-2 py-1 rounded-full ${style === strategy.recommended_hook_style ? 'bg-brand-900 text-brand-300' : 'bg-gray-800 text-gray-400'}`}>
+                    {style.replace(/_/g, ' ')}: {count}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </div>

@@ -19,6 +19,7 @@ from moviepy import (
 
 from app.config import settings
 from app.generation.pattern import extract_patterns
+from app.analysis.strategy import load_strategy
 from app.costs import COST_PER_SCRAPE, COST_PER_GENERATE, COST_PER_UPLOAD
 
 
@@ -27,8 +28,13 @@ class VideoGenerationPipeline:
         self.temp_dir = Path(settings.temp_dir) / "generation"
         self.temp_dir.mkdir(parents=True, exist_ok=True)
 
-    async def generate(self, top_videos: list[dict]) -> dict:
-        patterns = extract_patterns(top_videos)
+    async def generate(self, top_videos: list[dict], strategy: dict | None = None) -> dict:
+        if strategy is None:
+            try:
+                strategy = await load_strategy()
+            except Exception:
+                strategy = None
+        patterns = extract_patterns(top_videos, strategy)
         task_id = str(uuid.uuid4())[:8]
         work_dir = self.temp_dir / task_id
         work_dir.mkdir(parents=True, exist_ok=True)
@@ -37,20 +43,28 @@ class VideoGenerationPipeline:
             self._download_stock_clip, work_dir
         )
 
+        use_music = patterns.get("use_music", True)
         music_path = None
         audio_path = None
-        if top_videos and top_videos[0].get("download_url"):
+        if use_music and top_videos and top_videos[0].get("download_url"):
             music_path, audio_path = await asyncio.to_thread(
                 self._download_music, top_videos[0], work_dir
             )
 
-        caption_text = patterns["hook_text"]
+        caption_text = await asyncio.to_thread(
+            self._build_caption_text, top_videos, patterns, strategy
+        )
         if audio_path:
             transcription = await asyncio.to_thread(
                 self._transcribe_audio, audio_path
             )
             if transcription and len(transcription) > 5:
                 caption_text = transcription
+
+        resolution = (strategy or {}).get("recommended_resolution", "1080x1920")
+        parts = resolution.split("x")
+        video_width = int(parts[0]) if len(parts) == 2 else 540
+        video_height = int(parts[1]) if len(parts) == 2 else 960
 
         output_path = work_dir / "output.mp4"
         thumbnail_path = work_dir / "thumbnail.jpg"
@@ -63,6 +77,8 @@ class VideoGenerationPipeline:
             output_path=output_path,
             thumbnail_path=thumbnail_path,
             target_duration=patterns["target_duration"],
+            video_width=video_width,
+            video_height=video_height,
         )
 
         generated_caption = self._build_caption(caption_text, patterns["top_hashtags"])
@@ -188,10 +204,12 @@ class VideoGenerationPipeline:
         output_path: Path,
         thumbnail_path: Path,
         target_duration: int,
+        video_width: int = 540,
+        video_height: int = 960,
     ):
         clip = VideoFileClip(stock_video_path)
-        clip = clip.resize(height=960)
-        clip = clip.crop(x_center=clip.w / 2, y_center=clip.h / 2, width=540, height=960)
+        clip = clip.resize(height=video_height)
+        clip = clip.crop(x_center=clip.w / 2, y_center=clip.h / 2, width=video_width, height=video_height)
 
         if clip.duration < 1:
             clip = clip.loop(duration=target_duration)
@@ -231,11 +249,11 @@ class VideoGenerationPipeline:
             font="Arial",
             font_size=42,
             color="black",
-            size=(540, 180),
+            size=(video_width, 180),
         )
         txt_bg = txt_bg.with_position(("center", "bottom")).with_duration(clip.duration).with_start(1).with_opacity(0)
 
-        final = CompositeVideoClip([clip, txt_clip], size=(540, 960))
+        final = CompositeVideoClip([clip, txt_clip], size=(video_width, video_height))
 
         if music_path:
             try:
@@ -278,6 +296,26 @@ class VideoGenerationPipeline:
         selected = hashtags[:5] if hashtags else ["viral", "fyp", "trending", "reels", "shorts"]
         tag_str = " ".join(f"#{t}" if not t.startswith("#") else t for t in selected)
         return f"{hook}\n\n{tag_str}".strip()
+
+    def _build_caption_text(self, top_videos: list[dict], patterns: dict, strategy: dict | None = None) -> str:
+        caption_style = patterns.get("caption_style", "standard")
+        if not top_videos:
+            return patterns.get("hook_text", "Did you know this?")
+
+        best_caption = top_videos[0].get("caption", "") or ""
+
+        if caption_style == "storytelling":
+            return f"I couldn't believe what I found.\n\n{best_caption[:200]}"
+        elif caption_style == "educational":
+            return f"Here's a quick tip:\n\n{best_caption[:200]}"
+        elif caption_style == "call_to_action":
+            return f"{best_caption[:200]}\n\nFollow for more content like this!"
+        elif caption_style == "controversial":
+            return f"Hot take: {best_caption[:200]}\n\nWhat do you think?"
+        elif caption_style == "humorous":
+            return f"POV: {best_caption[:180]}\n\nThis is too real."
+        else:
+            return best_caption[:300] or "Did you know this?"
 
     def cleanup(self, task_id: str):
         work_dir = self.temp_dir / task_id

@@ -17,6 +17,7 @@ from app.scrapers.youtube import YouTubeScraper
 from app.scrapers.facebook import FacebookScraper
 from app.scoring.engine import compute_virality_score
 from app.generation.pipeline import VideoGenerationPipeline
+from app.analysis.strategy import analyze_strategy, load_strategy
 
 logger = logging.getLogger(__name__)
 
@@ -105,6 +106,11 @@ async def _scrape_and_score_async():
 
         await session.commit()
     logger.info(f"Scrape and score complete. Total videos: {sum(len(v) for _, v in all_scraped)}")
+    try:
+        await analyze_strategy()
+        logger.info("Content strategy analyzed and saved")
+    except Exception as e:
+        logger.error(f"Strategy analysis failed: {e}")
 
 
 async def _collect_trending_hashtags(session: AsyncSession) -> set:
@@ -166,9 +172,14 @@ async def _generate_video_async() -> Optional[dict]:
                     "virality_score": sv.virality_score,
                 })
 
+    strategy = None
+    try:
+        strategy = await load_strategy()
+    except Exception as e:
+        logger.warning(f"Could not load strategy: {e}")
     pipeline = VideoGenerationPipeline()
     try:
-        generation_result = await pipeline.generate(top_videos_data)
+        generation_result = await pipeline.generate(top_videos_data, strategy)
     except Exception as e:
         logger.error(f"Video generation failed: {e}")
         return None

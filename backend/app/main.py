@@ -17,6 +17,7 @@ from app.config import settings
 from app.database import init_db, get_db, async_session_factory
 from app.models import ScrapedVideo, ScoredVideo, GeneratedVideo, UploadLog, ScheduleConfig, AppConfig
 from app.costs import COST_PER_SCRAPE, COST_PER_GENERATE, COST_PER_UPLOAD, PROVIDERS, estimate_full_pipeline, estimate_scrape_cost, estimate_generate_cost, estimate_upload_cost
+from app.analysis.strategy import analyze_strategy, load_strategy, _default_strategy
 from app.scrapers.instagram import InstagramScraper
 from app.scrapers.tiktok import TikTokScraper
 from app.scrapers.youtube import YouTubeScraper
@@ -423,6 +424,18 @@ async def get_cost_summary(db: AsyncSession = Depends(get_db)):
 async def estimate_costs(platforms: str = "instagram,tiktok,youtube,facebook", count: int = 10):
     platform_list = [p.strip() for p in platforms.split(",") if p.strip()]
     return estimate_full_pipeline(platform_list, count)
+
+
+@app.get("/api/strategy")
+async def get_strategy(db: AsyncSession = Depends(get_db)):
+    strategy = await load_strategy(db)
+    return strategy
+
+
+@app.post("/api/strategy/refresh")
+async def refresh_strategy(response: Response, db: AsyncSession = Depends(get_db)):
+    strategy = await analyze_strategy(db)
+    return strategy
 
 
 DEFAULT_CONFIGS = {
