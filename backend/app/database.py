@@ -1,8 +1,13 @@
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.dialects.postgresql import psycopg2 as psycopg2_dialect
 from app.config import settings
 
-engine = create_async_engine(settings.database_url, echo=settings.debug)
+psycopg2_dialect.PGDialect_psycopg2.is_async = True
+
+sync_engine = create_engine(settings.database_url_sync, echo=settings.debug)
+engine = AsyncEngine(sync_engine)
 async_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 

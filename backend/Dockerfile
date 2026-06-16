@@ -4,7 +4,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
-    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN sed -i 's/<policy domain="path" rights="none" pattern="@\*"/<policy domain="path" rights="read | write" pattern="@*"/' /etc/ImageMagick-6/policy.xml || true
