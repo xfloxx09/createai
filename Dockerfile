@@ -35,6 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel uvicorn celery redis
 
 COPY --from=backend-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+RUN python -c "import asyncpg; print('asyncpg imports OK in final stage')"
 COPY --from=backend-build /app /backend
 COPY --from=frontend-build /app/dist /frontend
 
