@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir 'setuptools<70'
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir --no-build-isolation openai-whisper==20240930
 RUN pip install --no-cache-dir setuptools
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt && python -c "import asyncpg; print('asyncpg OK')"
 COPY backend/ .
 
 FROM node:20-alpine AS frontend-build
