@@ -12,6 +12,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY requirements.txt .
+RUN pip install --no-cache-dir --no-build-isolation openai-whisper==20240930
 RUN pip install --no-cache-dir -r requirements.txt
 
 RUN playwright install --with-deps chromium 2>/dev/null || true
