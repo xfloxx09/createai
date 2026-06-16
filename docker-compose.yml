@@ -37,7 +37,7 @@ services:
       - ./backend:/app
       - media_data:/tmp/createai
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/createai
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/createai
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@postgres:5432/createai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -71,7 +71,7 @@ services:
       - ./backend:/app
       - media_data:/tmp/createai
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/createai
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/createai
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@postgres:5432/createai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -101,7 +101,7 @@ services:
     volumes:
       - ./backend:/app
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/createai
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/createai
       - DATABASE_URL_SYNC=postgresql://postgres:postgres@postgres:5432/createai
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0

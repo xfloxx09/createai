@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -27,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
     fonts-liberation \
+    libpq5 \
     nginx \
     && rm -rf /var/lib/apt/lists/*
 
