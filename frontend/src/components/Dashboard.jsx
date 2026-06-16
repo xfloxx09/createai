@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getScoredVideos, triggerScrape, getStats, getCostSummary, getStrategy, refreshStrategy } from '../api'
+import Toast, { useToast } from './Toast'
 
 const PLATFORMS = ['instagram', 'tiktok', 'youtube', 'facebook']
 
@@ -48,6 +49,9 @@ export default function Dashboard() {
   const [scraping, setScraping] = useState(false)
   const [filter, setFilter] = useState('')
   const [minScore, setMinScore] = useState('')
+  const { toast, show: showToast, dismiss } = useToast()
+
+  const showError = (msg) => showToast(msg, 'error', 8000)
 
   const fetchData = useCallback(async () => {
     try {
@@ -75,17 +79,22 @@ export default function Dashboard() {
 
   const handleScrape = async () => {
     setScraping(true)
+    showToast('Scrape started...', 'info', 3000)
     try {
       await triggerScrape()
+      showToast('Scrape task queued — results incoming in a few seconds', 'success', 5000)
       setTimeout(async () => {
-        await fetchData()
         try {
+          await fetchData()
           const s = await refreshStrategy()
           setStrategy(s)
-        } catch (_) {}
+          showToast('Scrape complete! New data and strategy ready.', 'success', 5000)
+        } catch (err) {
+          showError('Scrape finished but failed to load results: ' + (err?.response?.data?.detail || err.message))
+        }
       }, 8000)
     } catch (err) {
-      console.error('Scrape failed:', err)
+      showError('Scrape failed: ' + (err?.response?.data?.detail || err.message))
     } finally {
       setScraping(false)
     }
@@ -93,6 +102,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <Toast toast={toast} onDismiss={dismiss} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <button onClick={handleScrape} disabled={scraping} className="btn-primary">

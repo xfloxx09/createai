@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
@@ -27,3 +27,19 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _migrate_schema()
+
+
+MIGRATIONS = [
+    "ALTER TABLE generated_videos ADD COLUMN IF NOT EXISTS total_cost FLOAT DEFAULT 0.0",
+    "ALTER TABLE generated_videos ADD COLUMN IF NOT EXISTS cost_breakdown JSON DEFAULT '{}'::json",
+]
+
+
+async def _migrate_schema():
+    async with engine.begin() as conn:
+        for stmt in MIGRATIONS:
+            try:
+                await conn.execute(text(stmt))
+            except Exception:
+                pass
