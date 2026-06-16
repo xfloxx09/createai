@@ -433,7 +433,7 @@ async def get_strategy(db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/strategy/refresh")
-async def refresh_strategy(response: Response, db: AsyncSession = Depends(get_db)):
+async def refresh_strategy(db: AsyncSession = Depends(get_db)):
     strategy = await analyze_strategy(db)
     return strategy
 
