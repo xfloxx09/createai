@@ -4,6 +4,7 @@ import Dashboard from './components/Dashboard'
 import Generator from './components/Generator'
 import ScheduleSettings from './components/ScheduleSettings'
 import UploadLog from './components/UploadLog'
+import Admin from './components/Admin'
 
 function NavBar() {
   const linkClass = ({ isActive }) =>
@@ -24,6 +25,7 @@ function NavBar() {
             <NavLink to="/generate" className={linkClass}>Generate</NavLink>
             <NavLink to="/schedule" className={linkClass}>Schedule</NavLink>
             <NavLink to="/uploads" className={linkClass}>Uploads</NavLink>
+            <NavLink to="/admin" className={linkClass}>Admin</NavLink>
           </div>
         </div>
       </div>
@@ -52,6 +54,7 @@ export default function App() {
           <Route path="/generate" element={<Generator />} />
           <Route path="/schedule" element={<ScheduleSettings />} />
           <Route path="/uploads" element={<UploadLog />} />
+          <Route path="/admin" element={<Admin />} />
         </Routes>
       </Layout>
     </Router>

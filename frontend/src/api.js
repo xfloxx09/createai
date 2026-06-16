@@ -48,4 +48,10 @@ export const getVideoDownloadUrl = (videoId) =>
 export const getVideoThumbnailUrl = (videoId) =>
   `/api/generated/${videoId}/thumbnail`
 
+export const getAdminConfig = (key) =>
+  api.get(`/admin/config/${key}`).then((r) => r.data)
+
+export const updateAdminConfig = (key, value) =>
+  api.put(`/admin/config/${key}`, value).then((r) => r.data)
+
 export default api

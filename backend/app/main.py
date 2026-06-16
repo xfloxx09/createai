@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import init_db, get_db, async_session_factory
-from app.models import ScrapedVideo, ScoredVideo, GeneratedVideo, UploadLog, ScheduleConfig
+from app.models import ScrapedVideo, ScoredVideo, GeneratedVideo, UploadLog, ScheduleConfig, AppConfig
 from app.scrapers.instagram import InstagramScraper
 from app.scrapers.tiktok import TikTokScraper
 from app.scrapers.youtube import YouTubeScraper
@@ -393,6 +393,65 @@ async def get_stats(db: AsyncSession = Depends(get_db)):
         "upload_statuses": upload_statuses,
         "platform_counts": platform_counts,
     }
+
+
+DEFAULT_CONFIGS = {
+    "scrape": {
+        "instagram_enabled": True,
+        "tiktok_enabled": True,
+        "youtube_enabled": True,
+        "facebook_enabled": True,
+        "max_per_platform": 50,
+        "apify_token": "",
+        "youtube_api_key": "",
+    },
+    "generate": {
+        "stock_video_source": "pexels",
+        "pexels_api_key": "",
+        "whisper_model": "base",
+        "music_enabled": False,
+        "hook_style": "question",
+        "caption_style": "standard",
+        "max_duration": 60,
+        "resolution": "1080x1920",
+    },
+    "upload": {
+        "instagram": {"enabled": True, "app_id": "", "app_secret": "", "page_access_token": "", "ig_user_id": ""},
+        "tiktok": {"enabled": True, "upload_post_api_key": ""},
+        "youtube": {"enabled": True, "client_id": "", "client_secret": "", "refresh_token": ""},
+        "facebook": {"enabled": True, "page_access_token": ""},
+    },
+}
+
+
+async def _get_config(db: AsyncSession, key: str) -> dict:
+    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+    row = result.scalar_one_or_none()
+    if row:
+        return row.value
+    return DEFAULT_CONFIGS.get(key, {})
+
+
+@app.get("/api/admin/config/{key}")
+async def get_admin_config(key: str, db: AsyncSession = Depends(get_db)):
+    if key not in DEFAULT_CONFIGS:
+        raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
+    config = await _get_config(db, key)
+    return {"key": key, "value": config}
+
+
+@app.put("/api/admin/config/{key}")
+async def update_admin_config(key: str, body: dict, db: AsyncSession = Depends(get_db)):
+    if key not in DEFAULT_CONFIGS:
+        raise HTTPException(status_code=400, detail=f"Unknown config key: {key}")
+    result = await db.execute(select(AppConfig).where(AppConfig.key == key))
+    row = result.scalar_one_or_none()
+    if row:
+        row.value = body
+    else:
+        db.add(AppConfig(key=key, value=body))
+    await db.commit()
+    return {"status": "updated", "key": key}
 
 
 frontend_dir = "/frontend"

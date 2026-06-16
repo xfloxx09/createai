@@ -85,3 +85,12 @@ class ScheduleConfig(Base):
     interval_hours = Column(Integer, default=24, nullable=False)
     active = Column(Boolean, default=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
+class AppConfig(Base):
+    __tablename__ = "app_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False, index=True)
+    value = Column(JSON, nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
