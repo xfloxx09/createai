@@ -79,20 +79,15 @@ export default function Dashboard() {
 
   const handleScrape = async () => {
     setScraping(true)
-    showToast('Scrape started...', 'info', 3000)
+    showToast('Scraping in progress...', 'info', 3000)
     try {
-      await triggerScrape()
-      showToast('Scrape task queued — results incoming in a few seconds', 'success', 5000)
-      setTimeout(async () => {
-        try {
-          await fetchData()
-          const s = await refreshStrategy()
-          setStrategy(s)
-          showToast('Scrape complete! New data and strategy ready.', 'success', 5000)
-        } catch (err) {
-          showError('Scrape finished but failed to load results: ' + (err?.response?.data?.detail || err.message))
-        }
-      }, 8000)
+      const result = await triggerScrape()
+      showToast(result.message || 'Scrape complete!', 'success', 5000)
+      await fetchData()
+      try {
+        const s = await refreshStrategy()
+        setStrategy(s)
+      } catch (_) {}
     } catch (err) {
       showError('Scrape failed: ' + (err?.response?.data?.detail || err.message))
     } finally {

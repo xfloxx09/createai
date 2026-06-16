@@ -25,7 +25,7 @@ from app.scrapers.facebook import FacebookScraper
 from app.scoring.engine import compute_virality_score
 from app.generation.pipeline import VideoGenerationPipeline
 from app.upload.manager import UploadManager
-from app.scheduler.tasks import scrape_and_score, generate_video_task, auto_upload_task
+from app.scheduler.tasks import scrape_and_score, generate_video_task, auto_upload_task, _scrape_and_score_async, _generate_video_async
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -188,9 +188,12 @@ async def get_top_videos(limit: int = Query(10, ge=1, le=50), db: AsyncSession =
 
 
 @app.post("/api/scrape/trigger")
-async def trigger_scrape(background_tasks: BackgroundTasks):
-    background_tasks.add_task(scrape_and_score.delay)
-    return {"status": "accepted", "message": "Scrape task queued"}
+async def trigger_scrape():
+    try:
+        await _scrape_and_score_async()
+        return {"status": "success", "message": "Scrape completed"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
 
 
 @app.post("/api/generate", response_model=GenerateResponse)
