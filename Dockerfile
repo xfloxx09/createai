@@ -1,0 +1,51 @@
+FROM python:3.12-slim AS backend-build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    imagemagick \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/ .
+
+FROM node:20-alpine AS frontend-build
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ .
+RUN npm run build
+
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    imagemagick \
+    fonts-liberation \
+    nginx \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install uvicorn celery redis
+
+COPY --from=backend-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=backend-build /app /backend
+COPY --from=frontend-build /app/dist /frontend
+
+COPY <<'EOF' /etc/nginx/conf.d/default.conf
+server {
+    listen 80;
+    location / {
+        root /frontend;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+EOF
+
+CMD nginx && uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
