@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from celery import Celery
@@ -138,8 +138,22 @@ async def _scrape_and_score_async() -> dict:
 def _filter_gems(videos: list, keep_top_pct: float = 0.20) -> list:
     if not videos:
         return []
-    scored = []
+    now = datetime.now(timezone.utc)
+    cutoff_7d = now - timedelta(days=7)
+    fresh = []
     for v in videos:
+        if v.upload_timestamp is None:
+            continue
+        ts = v.upload_timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if ts < cutoff_7d:
+            continue
+        fresh.append(v)
+    if not fresh:
+        return []
+    scored = []
+    for v in fresh:
         velocity = compute_growth_velocity(v)
         scored.append((velocity, v))
     scored.sort(key=lambda x: -x[0])

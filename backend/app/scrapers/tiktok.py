@@ -62,31 +62,36 @@ class TikTokScraper(BaseScraper):
         session.get("https://www.tiktok.com/foryou", timeout=15)
 
         results = []
-        count = min(30, max_results)
-        url = (
+        cursor = 0
+        calls = 0
+        max_calls = 4
+        base_url = (
             "https://www.tiktok.com/api/recommend/item_list/"
             f"?aid=1988&app_language=en&app_name=tiktok_web&browser_language=en-US"
             f"&browser_name=Mozilla&browser_version=5.0&channel=tiktok_web"
             f"&device_platform=web&focus_state=true&is_fullscreen=false"
             f"&is_page_visible=true&os=windows&priority_region=US"
             f"&region=US&screen_height=1080&screen_width=1920"
-            f"&tz_name=America/New_York&count={count}"
+            f"&tz_name=America/New_York&count=30"
         )
-        resp = session.get(url, headers=headers, timeout=30)
-        if not resp.ok:
-            raise RuntimeError(f"API returned {resp.status_code}")
-
-        data = resp.json()
-        items = data.get("itemList", [])
-        if not items:
-            items = data.get("items", [])
-
-        for item in items:
-            try:
-                results.append(self._parse_item(item))
-            except Exception:
-                continue
-        return results
+        while calls < max_calls and len(results) < max_results:
+            url = f"{base_url}&cursor={cursor}"
+            resp = session.get(url, headers=headers, timeout=30)
+            if not resp.ok:
+                break
+            data = resp.json()
+            items = data.get("itemList", []) or data.get("items", [])
+            for item in items:
+                try:
+                    results.append(self._parse_item(item))
+                except Exception:
+                    continue
+            new_cursor = data.get("cursor")
+            if new_cursor is None or new_cursor == cursor:
+                break
+            cursor = new_cursor
+            calls += 1
+        return results[:max_results]
 
     def _fetch_trending_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
         resp = requests.get("https://www.tiktok.com/trending", headers=headers, timeout=30)

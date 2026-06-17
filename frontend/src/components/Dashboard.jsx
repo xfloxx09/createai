@@ -1,8 +1,66 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { getScoredVideos, triggerScrape, getStats, getCostSummary, getStrategy, refreshStrategy } from '../api'
 import Toast, { useToast } from './Toast'
 
 const PLATFORMS = ['instagram', 'tiktok', 'youtube', 'facebook']
+const STATUS_PHASES = [
+  { min: 0, max: 10, text: 'Finding trending Shorts on YouTube...' },
+  { min: 10, max: 20, text: 'Scanning TikTok for rising gems...' },
+  { min: 20, max: 30, text: 'Checking Instagram Reels trends...' },
+  { min: 30, max: 40, text: 'Looking at Facebook Reels...' },
+  { min: 40, max: 55, text: 'Analyzing growth velocity & filtering gems...' },
+  { min: 55, max: 999, text: 'Scoring & saving — almost there...' },
+]
+
+function ScrapeModal({ scraping }) {
+  const [elapsed, setElapsed] = useState(0)
+  const [show, setShow] = useState(false)
+  const startRef = useRef(null)
+
+  useEffect(() => {
+    if (scraping) {
+      setShow(true)
+      startRef.current = Date.now()
+      setElapsed(0)
+      const id = setInterval(() => {
+        setElapsed(Math.floor((Date.now() - startRef.current) / 1000))
+      }, 500)
+      return () => clearInterval(id)
+    } else {
+      const id = setTimeout(() => setShow(false), 400)
+      return () => clearTimeout(id)
+    }
+  }, [scraping])
+
+  if (!show) return null
+
+  const phase = STATUS_PHASES.find(p => elapsed >= p.min && elapsed < p.max) || STATUS_PHASES[STATUS_PHASES.length - 1]
+
+  return (
+    <div className={`fixed inset-0 z-50 flex items-center justify-center transition-opacity duration-300 ${scraping ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="flex flex-col items-center gap-5">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 border-4 border-brand-500/20 rounded-full" />
+            <div className="absolute inset-0 border-4 border-transparent border-t-brand-500 rounded-full animate-spin" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-white">Scraping Viral Gems</p>
+            <p className="text-sm text-gray-400 mt-2 min-h-[20px] transition-all">{phase.text}</p>
+          </div>
+          <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-brand-500 to-green-500 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${Math.min(100, (elapsed / 60) * 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-500 font-mono">{elapsed}s elapsed</p>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function StatCard({ label, value, color }) {
   return (
@@ -79,7 +137,6 @@ export default function Dashboard() {
 
   const handleScrape = async () => {
     setScraping(true)
-    showToast('Scraping in progress...', 'info', 3000)
     try {
       const result = await triggerScrape()
       const per = result?.result?.per_platform || {}
@@ -111,10 +168,11 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <Toast toast={toast} onDismiss={dismiss} />
+      <ScrapeModal scraping={scraping} />
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <button onClick={handleScrape} disabled={scraping} className="btn-primary">
-          {scraping ? 'Scraping...' : 'Scrape Now'}
+          Scrape Now
         </button>
       </div>
 
