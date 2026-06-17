@@ -1,4 +1,5 @@
 import asyncio
+import concurrent.futures
 import time
 from datetime import datetime
 from typing import Optional
@@ -19,6 +20,7 @@ class InstagramScraper(BaseScraper):
         if not token:
             raise ValueError("APIFY_TOKEN not set — add it in Admin > Scrape tab")
         self._token = token
+        self._max_results = max_results
 
         try:
             return await asyncio.to_thread(self._scrape_via_apify, max_results)
@@ -27,35 +29,39 @@ class InstagramScraper(BaseScraper):
 
     def _scrape_via_apify(self, max_results: int) -> list[ScrapedVideoData]:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
-        all_results = []
-        hashtags = ["trending", "viral", "reels", "fyp", "explore", "trendingreels", "viralvideo"]
+        hashtags = ["trending", "viral", "reels"]
         per_tag = max(1, max_results // len(hashtags))
-        for tag in hashtags:
-            try:
-                run_resp = requests.post(
-                    f"{APIFY_API}/acts/apify~instagram-scraper/runs",
-                    headers=headers,
-                    json={
-                        "searchType": "hashtag",
-                        "searchValue": tag,
-                        "resultsLimit": per_tag,
-                        "proxyConfiguration": {"useApifyProxy": True},
-                    },
-                    timeout=30,
-                )
-                run_resp.raise_for_status()
-                run_data = run_resp.json()
-                run_id = run_data.get("data", {}).get("id")
-                if not run_id:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+            futures = []
+            for tag in hashtags:
+                futures.append(pool.submit(self._run_single_tag, headers, tag, per_tag))
+            all_results = []
+            for f in futures:
+                try:
+                    all_results.extend(f.result(timeout=120))
+                except Exception:
                     continue
-                dataset_id = self._wait_for_run(headers, run_id)
-                results = self._fetch_results(headers, dataset_id, per_tag)
-                all_results.extend(results)
-                if len(all_results) >= max_results:
-                    break
-            except Exception:
-                continue
         return all_results[:max_results]
+
+    def _run_single_tag(self, headers: dict, tag: str, limit: int) -> list:
+        run_resp = requests.post(
+            f"{APIFY_API}/acts/apify~instagram-scraper/runs",
+            headers=headers,
+            json={
+                "searchType": "hashtag",
+                "searchValue": tag,
+                "resultsLimit": limit,
+                "proxyConfiguration": {"useApifyProxy": True},
+            },
+            timeout=30,
+        )
+        run_resp.raise_for_status()
+        run_data = run_resp.json()
+        run_id = run_data.get("data", {}).get("id")
+        if not run_id:
+            return []
+        dataset_id = self._wait_for_run(headers, run_id)
+        return self._fetch_results(headers, dataset_id, limit)
 
     def _wait_for_run(self, headers: dict, run_id: str) -> str:
         for _ in range(60):
