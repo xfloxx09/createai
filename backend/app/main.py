@@ -190,8 +190,14 @@ async def get_top_videos(limit: int = Query(10, ge=1, le=50), db: AsyncSession =
 @app.post("/api/scrape/trigger")
 async def trigger_scrape():
     try:
-        await _scrape_and_score_async()
-        return {"status": "success", "message": "Scrape completed"}
+        result = await _scrape_and_score_async()
+        total = result.get("total_videos", 0)
+        errors = result.get("errors", {})
+        msg = f"Scraped {total} videos"
+        if errors:
+            errs = "; ".join(f"{p}: {e}" for p, e in errors.items())
+            msg += f" | Errors: {errs}"
+        return {"status": "success", "message": msg, "result": result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scrape failed: {str(e)}")
 

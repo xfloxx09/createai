@@ -45,7 +45,7 @@ def scrape_and_score(self):
         loop.close()
 
 
-async def _scrape_and_score_async():
+async def _scrape_and_score_async() -> dict:
     scrapers = [
         InstagramScraper(),
         TikTokScraper(),
@@ -54,13 +54,16 @@ async def _scrape_and_score_async():
     ]
 
     all_scraped = []
+    errors = {}
     for scraper in scrapers:
         try:
             videos = await scraper.scrape(max_results=settings.max_scrape_per_platform)
             all_scraped.append((scraper.platform, videos))
             logger.info(f"Scraped {len(videos)} from {scraper.platform}")
         except Exception as e:
-            logger.error(f"Failed to scrape {scraper.platform}: {e}")
+            msg = str(e)
+            logger.error(f"Failed to scrape {scraper.platform}: {msg}")
+            errors[scraper.platform] = msg
 
     async with async_session_factory() as session:
         trending_hashtags = await _collect_trending_hashtags(session)
@@ -105,12 +108,15 @@ async def _scrape_and_score_async():
                 session.add(scored)
 
         await session.commit()
-    logger.info(f"Scrape and score complete. Total videos: {sum(len(v) for _, v in all_scraped)}")
+    total = sum(len(v) for _, v in all_scraped)
+    logger.info(f"Scrape and score complete. Total videos: {total}")
     try:
         await analyze_strategy()
         logger.info("Content strategy analyzed and saved")
     except Exception as e:
         logger.error(f"Strategy analysis failed: {e}")
+
+    return {"total_videos": total, "per_platform": {p: len(v) for p, v in all_scraped}, "errors": errors}
 
 
 async def _collect_trending_hashtags(session: AsyncSession) -> set:

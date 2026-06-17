@@ -82,7 +82,14 @@ export default function Dashboard() {
     showToast('Scraping in progress...', 'info', 3000)
     try {
       const result = await triggerScrape()
-      showToast(result.message || 'Scrape complete!', 'success', 5000)
+      const total = result?.result?.total_videos || 0
+      const errors = result?.result?.errors || {}
+      let msg = `Scraped ${total} videos`
+      if (Object.keys(errors).length > 0) {
+        const errList = Object.entries(errors).map(([p, e]) => `${p}: ${e}`).join('; ')
+        msg += ` — Errors: ${errList}`
+      }
+      showToast(msg, total > 0 ? 'success' : 'warning', 8000)
       await fetchData()
       try {
         const s = await refreshStrategy()
