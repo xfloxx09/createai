@@ -4,14 +4,17 @@ from typing import Optional
 
 from app.config import settings
 from app.scrapers.base import BaseScraper, ScrapedVideoData
+from app.config_helper import get_config_value
 
 
 class InstagramScraper(BaseScraper):
     platform = "instagram"
 
     async def scrape(self, max_results: int = 50) -> list[ScrapedVideoData]:
-        if not settings.apify_token:
-            raise ValueError("APIFY_TOKEN not set")
+        token = await get_config_value("scrape", "apify_token")
+        if not token:
+            raise ValueError("APIFY_TOKEN not set — add it in Admin > Scrape tab")
+        self._token = token
 
         try:
             return await self._scrape_via_apify(max_results)
@@ -21,7 +24,7 @@ class InstagramScraper(BaseScraper):
     async def _scrape_via_apify(self, max_results: int) -> list[ScrapedVideoData]:
         from apify_client import ApifyClient
 
-        client = ApifyClient(settings.apify_token)
+        client = ApifyClient(self._token)
         run_input = {
             "searchType": "hashtag",
             "searchValue": "trending",
