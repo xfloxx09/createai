@@ -53,17 +53,23 @@ async def _scrape_and_score_async() -> dict:
         FacebookScraper(),
     ]
 
-    all_raw = {}
-    errors = {}
-    for scraper in scrapers:
+    async def _scrape_one(scraper):
         try:
             videos = await scraper.scrape(max_results=settings.max_scrape_per_platform)
-            all_raw[scraper.platform] = videos
             logger.info(f"Scraped {len(videos)} raw from {scraper.platform}")
+            return scraper.platform, videos, None
         except Exception as e:
             msg = str(e)
             logger.error(f"Failed to scrape {scraper.platform}: {msg}")
-            errors[scraper.platform] = msg
+            return scraper.platform, [], msg
+
+    results = await asyncio.gather(*(_scrape_one(s) for s in scrapers))
+    all_raw = {}
+    errors = {}
+    for platform, videos, err in results:
+        all_raw[platform] = videos
+        if err:
+            errors[platform] = err
 
     filtered_counts = {}
     gems = {}

@@ -28,21 +28,23 @@ class YouTubeScraper(BaseScraper):
             try:
                 results = self._fetch_batch(query, max_results)
                 for v in results:
-                    if v.video_url not in seen and 0 < v.duration <= 90:
+                    if v.video_url not in seen:
                         seen[v.video_url] = v
             except Exception:
                 continue
-            if len(seen) >= max_results:
+            if len(seen) >= max_results * 2:
                 break
-        return list(seen.values())[:max_results]
+
+        unique = list(seen.values())[:max_results]
+        return unique
 
     def _fetch_batch(self, query: str, max_results: int) -> list[ScrapedVideoData]:
         cmd = [
             "yt-dlp", "--dump-json", "--no-download", "--no-warnings",
-            "--ignore-no-formats-error", "--playlist-end", str(max_results),
-            query,
+            "--flat-playlist", "--ignore-no-formats-error",
+            "--playlist-end", str(max_results), query,
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0 and not result.stdout.strip():
             raise RuntimeError(f"yt-dlp failed: {result.stderr[:200]}")
 
@@ -72,26 +74,14 @@ class YouTubeScraper(BaseScraper):
             except ValueError:
                 pass
 
-        tags = data.get("tags") or []
-        hashtags = [t for t in tags if t.startswith("#")] if tags else []
-        if not hashtags and data.get("description"):
-            hashtags = [w.strip("#") for w in data["description"].split() if w.startswith("#")]
-
         return ScrapedVideoData(
             platform="youtube",
             video_url=f"https://www.youtube.com/watch?v={data.get('id', '')}",
-            download_url=None,
-            likes=int(data.get("like_count", 0)),
-            comments=int(data.get("comment_count", 0)),
-            shares=0,
+            likes=int(data.get("view_count", 0)),
             views=int(data.get("view_count", 0)),
-            caption=data.get("description", "").strip(),
-            hashtags=hashtags[:20],
-            music=None,
+            caption=data.get("title", ""),
             duration=duration,
-            author_follower_count=int(data.get("channel_follower_count", 0) or 0),
             upload_timestamp=upload_ts,
             thumbnail_url=data.get("thumbnail"),
-            resolution_height=data.get("height"),
             raw_data=data,
         )
