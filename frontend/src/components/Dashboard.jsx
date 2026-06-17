@@ -220,6 +220,7 @@ export default function Dashboard() {
                   <th className="pb-3 pr-4">Platform</th>
                   <th className="pb-3 pr-4">Caption</th>
                   <th className="pb-3 pr-4">Engagement</th>
+                  <th className="pb-3 pr-4">Link</th>
                   <th className="pb-3 pr-4">Hashtags</th>
                   <th className="pb-3 pr-4">Music</th>
                 </tr>
@@ -236,11 +237,18 @@ export default function Dashboard() {
                     <td className="py-3 pr-4 max-w-xs truncate text-gray-300">
                       {v.caption || '-'}
                     </td>
-                    <td className="py-3 pr-4 text-gray-300">
-                      <div>❤️ {v.likes?.toLocaleString()}</div>
-                      <div>👁 {v.views?.toLocaleString()}</div>
-                    </td>
-                    <td className="py-3 pr-4">
+                      <td className="py-3 pr-4 text-gray-300">
+                        <div>❤️ {v.likes?.toLocaleString()}</div>
+                        <div>👁 {v.views?.toLocaleString()}</div>
+                      </td>
+                      <td className="py-3 pr-4">
+                        {v.video_url ? (
+                          <a href={v.video_url} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:text-brand-300 underline text-xs" title={v.video_url}>
+                            Open ↗
+                          </a>
+                        ) : '-'}
+                      </td>
+                      <td className="py-3 pr-4">
                       <div className="flex flex-wrap gap-1">
                         {(v.hashtags || []).slice(0, 3).map((h, i) => (
                           <span key={i} className="text-xs text-brand-300">#{h}</span>
