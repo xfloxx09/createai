@@ -27,15 +27,21 @@ class TikTokScraper(BaseScraper):
             ),
             "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://www.tiktok.com/",
         }
 
         try:
             return self._scrape_via_web_feed(headers, max_results)
         except Exception:
-            return self._scrape_via_trending_page(headers, max_results)
+            try:
+                return self._scrape_via_trending_page(headers, max_results)
+            except Exception:
+                return self._scrape_via_discover_page(headers, max_results)
 
     def _scrape_via_web_feed(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
-        resp = requests.get(
+        session = requests.Session()
+        session.get("https://www.tiktok.com/", headers=headers, timeout=15)
+        resp = session.get(
             "https://www.tiktok.com/api/recommend/item_list/",
             params={
                 "aid": 1988,
@@ -82,6 +88,34 @@ class TikTokScraper(BaseScraper):
                     break
 
         return [self._parse_item(item) for item in video_data[:max_results]]
+
+    def _scrape_via_discover_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
+        resp = requests.get(
+            "https://www.tiktok.com/discover",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        ids = set()
+        for match in re.finditer(r'data-video-id="([^"]+)"', resp.text):
+            ids.add(match.group(1))
+        for match in re.finditer(r'/video/(\d+)', resp.text):
+            ids.add(match.group(1))
+        results = []
+        for vid in list(ids)[:max_results]:
+            try:
+                detail_resp = requests.get(
+                    f"https://www.tiktok.com/api/item/detail/?itemId={vid}",
+                    headers=headers,
+                    timeout=15,
+                )
+                if detail_resp.ok:
+                    detail_data = detail_resp.json()
+                    if detail_data.get("itemInfo", {}).get("item"):
+                        results.append(self._parse_item(detail_data["itemInfo"]["item"]))
+            except Exception:
+                continue
+        return results
 
     def _parse_item(self, item: dict) -> ScrapedVideoData:
         author = item.get("author", {})

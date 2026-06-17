@@ -27,25 +27,35 @@ class InstagramScraper(BaseScraper):
 
     def _scrape_via_apify(self, max_results: int) -> list[ScrapedVideoData]:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
-        run_resp = requests.post(
-            f"{APIFY_API}/acts/apify~instagram-scraper/runs",
-            headers=headers,
-            json={
-                "searchType": "hashtag",
-                "searchValue": "trending",
-                "resultsLimit": max_results,
-                "proxyConfiguration": {"useApifyProxy": True},
-            },
-            timeout=30,
-        )
-        run_resp.raise_for_status()
-        run_data = run_resp.json()
-        run_id = run_data.get("data", {}).get("id")
-        if not run_id:
-            raise RuntimeError("Failed to start Apify Instagram run")
-
-        dataset_id = self._wait_for_run(headers, run_id)
-        return self._fetch_results(headers, dataset_id, max_results)
+        all_results = []
+        hashtags = ["trending", "viral", "reels", "fyp", "explore", "trendingreels", "viralvideo"]
+        per_tag = max(1, max_results // len(hashtags))
+        for tag in hashtags:
+            try:
+                run_resp = requests.post(
+                    f"{APIFY_API}/acts/apify~instagram-scraper/runs",
+                    headers=headers,
+                    json={
+                        "searchType": "hashtag",
+                        "searchValue": tag,
+                        "resultsLimit": per_tag,
+                        "proxyConfiguration": {"useApifyProxy": True},
+                    },
+                    timeout=30,
+                )
+                run_resp.raise_for_status()
+                run_data = run_resp.json()
+                run_id = run_data.get("data", {}).get("id")
+                if not run_id:
+                    continue
+                dataset_id = self._wait_for_run(headers, run_id)
+                results = self._fetch_results(headers, dataset_id, per_tag)
+                all_results.extend(results)
+                if len(all_results) >= max_results:
+                    break
+            except Exception:
+                continue
+        return all_results[:max_results]
 
     def _wait_for_run(self, headers: dict, run_id: str) -> str:
         for _ in range(60):

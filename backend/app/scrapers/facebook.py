@@ -28,7 +28,7 @@ class FacebookScraper(BaseScraper):
     def _scrape_via_apify(self, max_results: int) -> list[ScrapedVideoData]:
         headers = {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
         run_resp = requests.post(
-            f"{APIFY_API}/acts/scrapers-hub~facebook-reels-scraper/runs",
+            f"{APIFY_API}/acts/bernardo~facebook-reels-scraper/runs",
             headers=headers,
             json={
                 "startUrls": [{"url": "https://www.facebook.com/reel/"}],
