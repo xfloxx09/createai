@@ -15,7 +15,7 @@ from app.scrapers.instagram import InstagramScraper
 from app.scrapers.tiktok import TikTokScraper
 from app.scrapers.youtube import YouTubeScraper
 from app.scrapers.facebook import FacebookScraper
-from app.scoring.engine import compute_virality_score
+from app.scoring.engine import compute_virality_score, compute_growth_velocity
 from app.generation.pipeline import VideoGenerationPipeline
 from app.analysis.strategy import analyze_strategy, load_strategy
 
@@ -53,22 +53,30 @@ async def _scrape_and_score_async() -> dict:
         FacebookScraper(),
     ]
 
-    all_scraped = []
+    all_raw = {}
     errors = {}
     for scraper in scrapers:
         try:
             videos = await scraper.scrape(max_results=settings.max_scrape_per_platform)
-            all_scraped.append((scraper.platform, videos))
-            logger.info(f"Scraped {len(videos)} from {scraper.platform}")
+            all_raw[scraper.platform] = videos
+            logger.info(f"Scraped {len(videos)} raw from {scraper.platform}")
         except Exception as e:
             msg = str(e)
             logger.error(f"Failed to scrape {scraper.platform}: {msg}")
             errors[scraper.platform] = msg
 
+    filtered_counts = {}
+    gems = {}
+    for platform, videos in all_raw.items():
+        ranked = _filter_gems(videos)
+        gems[platform] = ranked
+        filtered_counts[platform] = {"scraped": len(videos), "saved": len(ranked)}
+        logger.info(f"{platform}: {len(videos)} scraped → {len(ranked)} gems")
+
     async with async_session_factory() as session:
         trending_hashtags = await _collect_trending_hashtags(session)
 
-        for platform, videos in all_scraped:
+        for platform, videos in gems.items():
             for video_data in videos:
                 scraped = ScrapedVideo(
                     platform=video_data.platform,
@@ -108,15 +116,29 @@ async def _scrape_and_score_async() -> dict:
                 session.add(scored)
 
         await session.commit()
-    total = sum(len(v) for _, v in all_scraped)
-    logger.info(f"Scrape and score complete. Total videos: {total}")
+    total_raw = sum(v for v, _ in [(len(v), None) for _, v in all_raw.items()])
+    total_saved = sum(v for v, _ in [(len(v), None) for _, v in gems.items()])
+    logger.info(f"Scrape complete. {total_raw} raw → {total_saved} gems")
     try:
         await analyze_strategy()
         logger.info("Content strategy analyzed and saved")
     except Exception as e:
         logger.error(f"Strategy analysis failed: {e}")
 
-    return {"total_videos": total, "per_platform": {p: len(v) for p, v in all_scraped}, "errors": errors}
+    per_platform = {p: {"scraped": f["scraped"], "saved": f["saved"]} for p, f in filtered_counts.items()}
+    return {"total_scraped": total_raw, "total_saved": total_saved, "per_platform": per_platform, "errors": errors}
+
+
+def _filter_gems(videos: list, keep_top_pct: float = 0.20) -> list:
+    if not videos:
+        return []
+    scored = []
+    for v in videos:
+        velocity = compute_growth_velocity(v)
+        scored.append((velocity, v))
+    scored.sort(key=lambda x: -x[0])
+    cutoff = max(1, int(len(scored) * keep_top_pct))
+    return [v for _, v in scored[:cutoff]]
 
 
 async def _collect_trending_hashtags(session: AsyncSession) -> set:

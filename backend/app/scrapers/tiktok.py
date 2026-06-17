@@ -12,7 +12,7 @@ from app.scrapers.base import BaseScraper, ScrapedVideoData
 class TikTokScraper(BaseScraper):
     platform = "tiktok"
 
-    async def scrape(self, max_results: int = 50) -> list[ScrapedVideoData]:
+    async def scrape(self, max_results: int = 200) -> list[ScrapedVideoData]:
         try:
             return await asyncio.to_thread(self._scrape_sync, max_results)
         except Exception as e:
@@ -25,44 +25,46 @@ class TikTokScraper(BaseScraper):
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
-            "Accept": "application/json, text/plain, */*",
             "Accept-Language": "en-US,en;q=0.9",
             "Referer": "https://www.tiktok.com/",
         }
 
-        try:
-            return self._scrape_via_web_feed(headers, max_results)
-        except Exception:
-            try:
-                return self._scrape_via_trending_page(headers, max_results)
-            except Exception:
-                return self._scrape_via_discover_page(headers, max_results)
+        seen_ids = set()
+        all_videos = []
 
-    def _scrape_via_web_feed(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
-        session = requests.Session()
-        session.get("https://www.tiktok.com/", headers=headers, timeout=15)
-        resp = session.get(
-            "https://www.tiktok.com/api/recommend/item_list/",
-            params={
-                "aid": 1988,
-                "app_name": "tiktok_web",
-                "device_platform": "web_pc",
-                "count": min(max_results, 30),
-            },
-            headers=headers,
-            timeout=30,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        items = data.get("itemList", [])
-        return [self._parse_item(item) for item in items[:max_results]]
-
-    def _scrape_via_trending_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
-        resp = requests.get(
+        for feed_url in [
             "https://www.tiktok.com/trending",
-            headers=headers,
-            timeout=30,
-        )
+            "https://www.tiktok.com/foryou",
+        ]:
+            try:
+                videos = self._scrape_trending_page(headers, feed_url, max_results)
+                for v in videos:
+                    vid = v.video_url
+                    if vid not in seen_ids:
+                        seen_ids.add(vid)
+                        all_videos.append(v)
+            except Exception:
+                continue
+            if len(all_videos) >= max_results:
+                break
+
+        if all_videos:
+            return all_videos[:max_results]
+
+        try:
+            videos = self._scrape_discover_page(headers, max_results)
+            for v in videos:
+                vid = v.video_url
+                if vid not in seen_ids:
+                    seen_ids.add(vid)
+                    all_videos.append(v)
+        except Exception:
+            pass
+
+        return all_videos[:max_results]
+
+    def _scrape_trending_page(self, headers: dict, url: str, max_results: int) -> list[ScrapedVideoData]:
+        resp = requests.get(url, headers=headers, timeout=30)
         resp.raise_for_status()
         script_match = re.search(
             r'<script id="__UNIVERSAL_DATA_FOR_VIEW_CONTAINER_TEXT"[^>]*type="application/json"[^>]*>(.*?)</script>',
@@ -70,35 +72,30 @@ class TikTokScraper(BaseScraper):
             re.DOTALL,
         )
         if not script_match:
-            raise RuntimeError("Could not find trending data in TikTok page")
+            raise RuntimeError("Could not find data in TikTok page")
 
         raw = json.loads(script_match.group(1))
         default_scope = raw.get("__DEFAULT_SCOPE__", {})
-        video_data = (
-            default_scope.get("webapp.trending", {})
-            .get("trending", {})
-            .get("itemList", [])
-        )
-        if not video_data:
-            module = default_scope.get("webapp.video-feed", {})
-            for key in module:
-                items = module[key].get("itemList", [])
-                if items:
-                    video_data = items
-                    break
+        video_data = []
+
+        for root_key in ("webapp.trending", "webapp.video-feed", "webapp.trending-feed"):
+            section = default_scope
+            for part in root_key.split("."):
+                section = section.get(part, {})
+            if isinstance(section, dict):
+                for sub_key in section:
+                    items = section[sub_key].get("itemList", [])
+                    if items:
+                        video_data.extend(items)
+            elif isinstance(section, list):
+                video_data.extend(section)
 
         return [self._parse_item(item) for item in video_data[:max_results]]
 
-    def _scrape_via_discover_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
-        resp = requests.get(
-            "https://www.tiktok.com/discover",
-            headers=headers,
-            timeout=30,
-        )
+    def _scrape_discover_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
+        resp = requests.get("https://www.tiktok.com/discover", headers=headers, timeout=30)
         resp.raise_for_status()
         ids = set()
-        for match in re.finditer(r'data-video-id="([^"]+)"', resp.text):
-            ids.add(match.group(1))
         for match in re.finditer(r'/video/(\d+)', resp.text):
             ids.add(match.group(1))
         results = []
@@ -111,8 +108,9 @@ class TikTokScraper(BaseScraper):
                 )
                 if detail_resp.ok:
                     detail_data = detail_resp.json()
-                    if detail_data.get("itemInfo", {}).get("item"):
-                        results.append(self._parse_item(detail_data["itemInfo"]["item"]))
+                    item = detail_data.get("itemInfo", {}).get("item")
+                    if item:
+                        results.append(self._parse_item(item))
             except Exception:
                 continue
         return results

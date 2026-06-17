@@ -12,22 +12,33 @@ def compute_virality_score(video: ScrapedVideoData, trending_hashtags: set = Non
     hours_since_upload = _hours_since(video.upload_timestamp)
     total_engagement = video.likes + video.comments + video.shares + video.saves
 
+    growth_velocity = compute_growth_velocity(video)
     engagement_rate = (total_engagement / views) * 100
-    growth_velocity = video.likes / max(hours_since_upload, 1)
     sound_trend_score = _compute_sound_trend(video)
     hashtag_score = _compute_hashtag_score(video.hashtags, trending_hashtags)
     retention_estimate = min(1.0, video.duration / 60.0) if video.duration > 0 else 0.5
-    author_authority = min(1.0, video.author_follower_count / 100000.0)
-    visual_quality_estimate = 1.0 if (video.resolution_height or 0) > 720 else 0.5
+
+    velocity_normalized = min(100.0, growth_velocity * 1.0)
+    engagement_normalized = min(100.0, engagement_rate * 2.0)
+    sound_normalized = sound_trend_score * 100.0
+    hashtag_normalized = hashtag_score * 100.0
+    retention_normalized = retention_estimate * 100.0
+
+    freshness_bonus = 0.0
+    if hours_since_upload < 6:
+        freshness_bonus = 10.0
+    elif hours_since_upload < 24:
+        freshness_bonus = 5.0
+    elif hours_since_upload < 72:
+        freshness_bonus = 2.0
 
     score = (
-        (engagement_rate * 0.25)
-        + (growth_velocity * 0.20)
-        + (sound_trend_score * 0.15)
-        + (hashtag_score * 0.10)
-        + (retention_estimate * 0.10)
-        + (author_authority * 0.10)
-        + (visual_quality_estimate * 0.10)
+        (velocity_normalized * 0.50)
+        + (engagement_normalized * 0.15)
+        + (sound_normalized * 0.15)
+        + (hashtag_normalized * 0.10)
+        + (retention_normalized * 0.10)
+        + freshness_bonus
     )
 
     normalized_score = min(100.0, max(0.0, score))
@@ -39,18 +50,25 @@ def compute_virality_score(video: ScrapedVideoData, trending_hashtags: set = Non
         "sound_trend_score": round(sound_trend_score, 4),
         "hashtag_score": round(hashtag_score, 4),
         "retention_estimate": round(retention_estimate, 4),
-        "author_authority": round(author_authority, 4),
-        "visual_quality_estimate": round(visual_quality_estimate, 4),
+        "author_authority": 0.0,
+        "visual_quality_estimate": 0.0,
+        "freshness_bonus": freshness_bonus,
+        "hours_since_upload": round(hours_since_upload, 1),
         "breakdown": {
-            "engagement_rate_weighted": round(engagement_rate * 0.25, 4),
-            "growth_velocity_weighted": round(growth_velocity * 0.20, 4),
-            "sound_trend_weighted": round(sound_trend_score * 0.15, 4),
-            "hashtag_weighted": round(hashtag_score * 0.10, 4),
-            "retention_weighted": round(retention_estimate * 0.10, 4),
-            "author_authority_weighted": round(author_authority * 0.10, 4),
-            "visual_quality_weighted": round(visual_quality_estimate * 0.10, 4),
+            "velocity_weighted": round(velocity_normalized * 0.50, 4),
+            "engagement_rate_weighted": round(engagement_normalized * 0.15, 4),
+            "sound_trend_weighted": round(sound_normalized * 0.15, 4),
+            "hashtag_weighted": round(hashtag_normalized * 0.10, 4),
+            "retention_weighted": round(retention_normalized * 0.10, 4),
+            "freshness_bonus": freshness_bonus,
         },
     }
+
+
+def compute_growth_velocity(video: ScrapedVideoData) -> float:
+    hours_since_upload = _hours_since(video.upload_timestamp)
+    total_engagement = video.likes + video.comments + video.shares + video.saves
+    return total_engagement / max(hours_since_upload, 1)
 
 
 def _hours_since(upload_ts: Optional[datetime]) -> float:

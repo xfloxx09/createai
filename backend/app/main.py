@@ -453,7 +453,7 @@ DEFAULT_CONFIGS = {
         "tiktok_enabled": True,
         "youtube_enabled": True,
         "facebook_enabled": True,
-        "max_per_platform": 50,
+        "max_per_platform": 200,
         "apify_token": "",
         "youtube_api_key": "",
     },

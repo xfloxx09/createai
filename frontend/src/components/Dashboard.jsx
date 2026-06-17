@@ -82,14 +82,20 @@ export default function Dashboard() {
     showToast('Scraping in progress...', 'info', 3000)
     try {
       const result = await triggerScrape()
-      const total = result?.result?.total_videos || 0
+      const per = result?.result?.per_platform || {}
       const errors = result?.result?.errors || {}
-      let msg = `Scraped ${total} videos`
-      if (Object.keys(errors).length > 0) {
-        const errList = Object.entries(errors).map(([p, e]) => `${p}: ${e}`).join('; ')
-        msg += ` — Errors: ${errList}`
+      const parts = []
+      for (const [platform, counts] of Object.entries(per)) {
+        if (counts.scraped > 0) {
+          parts.push(`${platform}: ${counts.scraped} → ${counts.saved} gems`)
+        }
       }
-      showToast(msg, total > 0 ? 'success' : 'warning', 8000)
+      for (const [platform, err] of Object.entries(errors)) {
+        parts.push(`${platform}: error — ${err.slice(0, 60)}`)
+      }
+      const totalSaved = result?.result?.total_saved || 0
+      const msg = parts.length > 0 ? parts.join(' | ') : 'No videos found'
+      showToast(msg, totalSaved > 0 ? 'success' : 'warning', 10000)
       await fetchData()
       try {
         const s = await refreshStrategy()

@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     celery_result_backend: str = ""
 
     temp_dir: str = "/tmp/createai"
-    max_scrape_per_platform: int = 50
+    max_scrape_per_platform: int = 200
     whisper_model: str = "base"
     debug: bool = False
 

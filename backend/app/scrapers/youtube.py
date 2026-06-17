@@ -1,72 +1,119 @@
 import asyncio
 import json
 import subprocess
+import re
 from datetime import datetime
 from typing import Optional
+
+import requests
 
 from app.scrapers.base import BaseScraper, ScrapedVideoData
 
 
 class YouTubeScraper(BaseScraper):
     platform = "youtube"
-    _trending_url = "https://www.youtube.com/feed/trending?bp=4gINGgt5dG91dGJlX3Nob3J0cw%3D%3D"
 
-    async def scrape(self, max_results: int = 50) -> list[ScrapedVideoData]:
+    async def scrape(self, max_results: int = 200) -> list[ScrapedVideoData]:
         try:
             return await asyncio.to_thread(self._scrape_sync, max_results)
         except Exception as e:
             raise RuntimeError(f"YouTube scrape failed: {e}")
 
     def _scrape_sync(self, max_results: int) -> list[ScrapedVideoData]:
-        cmd = [
-            "yt-dlp",
-            "--dump-json",
-            "--no-download",
-            "--no-warnings",
-            "--flat-playlist",
-            "--playlist-end", str(max_results),
-            self._trending_url,
+        seen_ids = set()
+        all_videos = []
+
+        feeds = [
+            "https://www.youtube.com/feed/trending",
+            "https://www.youtube.com/feed/explore",
         ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-        if result.returncode != 0:
-            raise RuntimeError(f"yt-dlp failed: {result.stderr}")
 
-        videos = []
-        for line in result.stdout.strip().split("\n"):
-            if not line.strip():
+        for feed_url in feeds:
+            ids = self._extract_shorts_ids(feed_url)
+            for vid_id in ids:
+                if vid_id in seen_ids:
+                    continue
+                seen_ids.add(vid_id)
+                try:
+                    data = self._fetch_video_data(vid_id)
+                    if data:
+                        all_videos.append(self._parse_item(data))
+                except Exception:
+                    continue
+                if len(all_videos) >= max_results:
+                    return all_videos
+
+        if all_videos:
+            return all_videos
+
+        ids = self._fetch_from_search(max_results)
+        for vid_id in ids:
+            if vid_id in seen_ids:
                 continue
+            seen_ids.add(vid_id)
             try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
+                data = self._fetch_video_data(vid_id)
+                if data:
+                    all_videos.append(self._parse_item(data))
+            except Exception:
                 continue
-            videos.append(self._parse_item(data))
+            if len(all_videos) >= max_results:
+                break
 
-        if not videos:
-            videos = self._scrape_trending_shorts_direct(max_results)
-        return videos
+        return all_videos
 
-    def _scrape_trending_shorts_direct(self, max_results: int) -> list[ScrapedVideoData]:
-        import requests
-        import re
+    def _extract_shorts_ids(self, url: str) -> list[str]:
+        try:
+            html = requests.get(url, timeout=30).text
+            ids = re.findall(r'\/shorts\/([a-zA-Z0-9_-]{11})', html)
+            return list(dict.fromkeys(ids))
+        except Exception:
+            return []
 
-        html = requests.get("https://www.youtube.com/feed/trending", timeout=30).text
-        video_ids = re.findall(r'\/shorts\/([a-zA-Z0-9_-]{11})', html)
-        video_ids = list(dict.fromkeys(video_ids))[:max_results]
+    def _fetch_from_search(self, max_results: int) -> list[str]:
+        try:
+            cmd = [
+                "yt-dlp", "--dump-json", "--no-download", "--no-warnings",
+                "--flat-playlist", "--playlist-end", str(max_results * 2),
+                "ytsearch:shorts",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            if result.returncode != 0:
+                return []
+            ids = []
+            for line in result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                try:
+                    data = json.loads(line)
+                    vid = data.get("id")
+                    if vid:
+                        ids.append(vid)
+                except json.JSONDecodeError:
+                    continue
+            return ids
+        except Exception:
+            return []
 
-        videos = []
-        for vid in video_ids:
-            url = f"https://www.youtube.com/shorts/{vid}"
-            try:
-                cmd = [
-                    "yt-dlp", "--dump-json", "--no-download", "--no-warnings", url,
-                ]
-                res = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-                if res.returncode == 0 and res.stdout.strip():
-                    data = json.loads(res.stdout)
-                    videos.append(self._parse_item(data))
-            except (subprocess.TimeoutExpired, json.JSONDecodeError, RuntimeError):
-                continue
-        return videos
+    def _fetch_video_data(self, vid: str) -> Optional[dict]:
+        try:
+            cmd = [
+                "yt-dlp", "--dump-json", "--no-download", "--no-warnings",
+                "--skip-download", f"https://www.youtube.com/shorts/{vid}",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0 and result.stdout.strip():
+                return json.loads(result.stdout)
+            cmd = [
+                "yt-dlp", "--dump-json", "--no-download", "--no-warnings",
+                "--skip-download", f"https://www.youtube.com/watch?v={vid}",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if result.returncode == 0 and result.stdout.strip():
+                return json.loads(result.stdout)
+        except Exception:
+            pass
+        return None
 
     def _parse_item(self, data: dict) -> ScrapedVideoData:
         upload_ts = None
