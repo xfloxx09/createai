@@ -29,7 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel uvicorn celery redis
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel uvicorn celery redis yt-dlp
 
 COPY --from=backend-build /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY --from=backend-build /app /backend

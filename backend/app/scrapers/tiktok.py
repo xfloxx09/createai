@@ -1,6 +1,10 @@
 import asyncio
+import json
+import re
 from datetime import datetime
 from typing import Optional
+
+import requests
 
 from app.scrapers.base import BaseScraper, ScrapedVideoData
 
@@ -10,31 +14,79 @@ class TikTokScraper(BaseScraper):
 
     async def scrape(self, max_results: int = 50) -> list[ScrapedVideoData]:
         try:
-            return await self._scrape_via_tiktokapi(max_results)
-        except ImportError:
-            raise RuntimeError(
-                "TikTokApi not installed. Run: pip install TikTokApi && playwright install chromium"
-            )
+            return await asyncio.to_thread(self._scrape_sync, max_results)
         except Exception as e:
             raise RuntimeError(f"TikTok scrape failed: {e}")
 
-    async def _scrape_via_tiktokapi(self, max_results: int) -> list[ScrapedVideoData]:
-        from TikTokApi import TikTokApi
+    def _scrape_sync(self, max_results: int) -> list[ScrapedVideoData]:
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
 
-        results = []
-        async with TikTokApi() as api:
-            await api.create_sessions(headless=True, num_sessions=1)
-            async for video in api.trending.videos(count=max_results):
-                item = video.as_dict
-                results.append(self._parse_item(item))
-                if len(results) >= max_results:
+        try:
+            return self._scrape_via_web_feed(headers, max_results)
+        except Exception:
+            return self._scrape_via_trending_page(headers, max_results)
+
+    def _scrape_via_web_feed(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
+        resp = requests.get(
+            "https://www.tiktok.com/api/recommend/item_list/",
+            params={
+                "aid": 1988,
+                "app_name": "tiktok_web",
+                "device_platform": "web_pc",
+                "count": min(max_results, 30),
+            },
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        items = data.get("itemList", [])
+        return [self._parse_item(item) for item in items[:max_results]]
+
+    def _scrape_via_trending_page(self, headers: dict, max_results: int) -> list[ScrapedVideoData]:
+        resp = requests.get(
+            "https://www.tiktok.com/trending",
+            headers=headers,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        script_match = re.search(
+            r'<script id="__UNIVERSAL_DATA_FOR_VIEW_CONTAINER_TEXT"[^>]*type="application/json"[^>]*>(.*?)</script>',
+            resp.text,
+            re.DOTALL,
+        )
+        if not script_match:
+            raise RuntimeError("Could not find trending data in TikTok page")
+
+        raw = json.loads(script_match.group(1))
+        default_scope = raw.get("__DEFAULT_SCOPE__", {})
+        video_data = (
+            default_scope.get("webapp.trending", {})
+            .get("trending", {})
+            .get("itemList", [])
+        )
+        if not video_data:
+            module = default_scope.get("webapp.video-feed", {})
+            for key in module:
+                items = module[key].get("itemList", [])
+                if items:
+                    video_data = items
                     break
-        return results
+
+        return [self._parse_item(item) for item in video_data[:max_results]]
 
     def _parse_item(self, item: dict) -> ScrapedVideoData:
-        stats = item.get("stats", {})
         author = item.get("author", {})
-        music_info = item.get("music", {})
+        stats = item.get("stats", {})
+        music_info = item.get("music", item.get("sound", {}))
         video = item.get("video", {})
 
         upload_ts = None
@@ -45,7 +97,7 @@ class TikTokScraper(BaseScraper):
             except (ValueError, TypeError):
                 pass
 
-        desc = item.get("desc", "")
+        desc = item.get("desc", "") or item.get("description", "")
         hashtags = []
         for ht in item.get("textExtra", []):
             tag = ht.get("hashtagName")
